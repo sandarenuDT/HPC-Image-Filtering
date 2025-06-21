@@ -1,31 +1,28 @@
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>          // Include for timing
-#include "../stb_image.h"
-#include "../stb_image_write.h"
+#include "../common/utils.h"
+#include <math.h>
 
-int clamp(int val) {
-    if (val < 0) return 0;
-    if (val > 255) return 255;
-    return val;
+
+// 2D Gaussian function
+float gaussian_2d(float x, float y, float sigma) {
+    return expf(-(x*x + y*y)/(2*sigma*sigma)) / (2*M_PI*sigma*sigma);
 }
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        printf("Usage: %s input_image output_image\n", argv[0]);
+        printf("Usage: %s input_image output_image [sigma]\n", argv[0]);
+        printf("Example: %s image.jpg blurred.png 1.2\n", argv[0]);
         return 1;
     }
 
+    // Parameters with defaults
+    float sigma = (argc > 3) ? atof(argv[3]) : 0.85f;  // Default σ = 0.85
     char input_path[512], output_path[512];
-    snprintf(input_path, sizeof(input_path), "../inputImages/%s", argv[1]);
-    snprintf(output_path, sizeof(output_path), "../outputImages/%s", argv[2]);
+    build_paths(argv[1], argv[2], input_path, output_path);
 
+    // Load image
     int width, height, channels;
-    unsigned char *img = stbi_load(input_path, &width, &height, &channels, 3);
+    unsigned char *img = load_image(input_path, &width, &height);
     if (!img) {
-        fprintf(stderr, "Error loading image %s\n", input_path);
         return 1;
     }
 
@@ -36,52 +33,61 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Start timing
-    clock_t start = clock();
+    // gaussian kernal generation
+    int radius = (int)ceilf(3 * sigma);  // 3σ rule covers 99.7% of distribution
+    int kernel_size = 2 * radius + 1;
+    float *kernel = malloc(kernel_size * kernel_size * sizeof(float));
+    float kernel_sum = 0.0f;
 
-    // Serial smoothing filter (3x3 mean filter)
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            int sum_r = 0, sum_g = 0, sum_b = 0;
-            int count = 0;
-
-            for (int ky = -1; ky <= 1; ky++) {
-                int yy = y + ky;
-                if (yy < 0) yy = 0;
-                if (yy >= height) yy = height - 1;
-
-                for (int kx = -1; kx <= 1; kx++) {
-                    int xx = x + kx;
-                    if (xx < 0) xx = 0;
-                    if (xx >= width) xx = width - 1;
-
-                    int idx = (yy * width + xx) * 3;
-                    sum_r += img[idx];
-                    sum_g += img[idx + 1];
-                    sum_b += img[idx + 2];
-                    count++;
-                }
-            }
-
-            int out_idx = (y * width + x) * 3;
-            out[out_idx]     = clamp(sum_r / count);
-            out[out_idx + 1] = clamp(sum_g / count);
-            out[out_idx + 2] = clamp(sum_b / count);
+    // Generate kernel weights
+    for (int ky = -radius; ky <= radius; ky++) {
+        for (int kx = -radius; kx <= radius; kx++) {
+            float weight = gaussian_2d(kx, ky, sigma);
+            kernel[(ky+radius)*kernel_size + (kx+radius)] = weight;
+            kernel_sum += weight;
         }
     }
 
-    // End timing
-    clock_t end = clock();
-    double elapsed_secs = (double)(end - start) / CLOCKS_PER_SEC;
-    printf("Smoothing operation took %.4f seconds\n", elapsed_secs);
-
-    if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
-        fprintf(stderr, "Error saving image %s\n", output_path);
-    } else {
-        printf("Smoothed image saved to %s\n", output_path);
+    // Normalizing kernel
+    for (int i = 0; i < kernel_size*kernel_size; i++) {
+        kernel[i] /= kernel_sum;
     }
 
-    free(out);
-    stbi_image_free(img);
+    //filtering
+    clock_t start = clock();
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            float sum_r = 0.0f, sum_g = 0.0f, sum_b = 0.0f;
+
+            // appplying kernel 
+            for (int ky = -radius; ky <= radius; ky++) {
+                int yy = y + ky;
+                // boundary handling
+                yy = (yy < 0) ? -yy : ((yy >= height) ? 2*height - yy - 2 : yy);
+
+                for (int kx = -radius; kx <= radius; kx++) {
+                    int xx = x + kx;
+                    xx = (xx < 0) ? -xx : ((xx >= width) ? 2*width - xx - 2 : xx);
+
+                    float weight = kernel[(ky+radius)*kernel_size + (kx+radius)];
+                    int idx = (yy * width + xx) * 3;
+                    sum_r += img[idx] * weight;
+                    sum_g += img[idx+1] * weight;
+                    sum_b += img[idx+2] * weight;
+                }
+            }
+
+            // result storing
+            int out_idx = (y * width + x) * 3;
+            out[out_idx] = clamp((int)roundf(sum_r));
+            out[out_idx+1] = clamp((int)roundf(sum_g));
+            out[out_idx+2] = clamp((int)roundf(sum_b));
+        }
+    }
+
+    finalize_and_save("smoothing",output_path, out, width, height, img, start);
+
+   
     return 0;
 }

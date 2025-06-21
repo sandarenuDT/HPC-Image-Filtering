@@ -1,7 +1,6 @@
 // color_edge_openmp.c
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -9,7 +8,7 @@
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
-// Clamp a value between min and max
+
 int clamp(int val, int min, int max) {
     if (val < min) return min;
     if (val > max) return max;
@@ -23,14 +22,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Construct input and output paths
+    // input and output paths
     char input_path[512];
     char output_path[512];
     snprintf(input_path, sizeof(input_path), "../inputImages/%s", argv[1]);
     snprintf(output_path, sizeof(output_path), "../outputImages/%s", argv[2]);
 
     int width, height, channels;
-    // Load image as RGB (3 channels)
+    // Load image
     unsigned char *img = stbi_load(input_path, &width, &height, &channels, 3);
     if (!img) {
         fprintf(stderr, "Error: Could not load image %s\n", input_path);
@@ -44,7 +43,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Sobel kernels
+    // Sobel 
     int Gx[3][3] = {
         {-1, 0, 1},
         {-2, 0, 2},
@@ -58,7 +57,7 @@ int main(int argc, char *argv[]) {
     double start = omp_get_wtime();
 
 
-    // Parallel edge detection on all pixels including borders by clamping indices
+    
     #pragma omp parallel for collapse(2)
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {

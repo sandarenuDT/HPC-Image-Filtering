@@ -1,19 +1,4 @@
-// embossing.c
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include "stb_image.h"
-#include "stb_image_write.h"
-
-// Clamp pixel values to [0, 255]
-int clamp(int val) {
-    if (val < 0) return 0;
-    if (val > 255) return 255;
-    return val;
-}
+#include "../common/utils.h"
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
@@ -22,15 +7,11 @@ int main(int argc, char *argv[]) {
     }
 
     char input_path[512], output_path[512];
-    snprintf(input_path, sizeof(input_path), "../inputImages/%s", argv[1]);
-    snprintf(output_path, sizeof(output_path), "../outputImages/%s", argv[2]);
+    build_paths(argv[1], argv[2], input_path, output_path);
 
-    int width, height, channels;
-    unsigned char *img = stbi_load(input_path, &width, &height, &channels, 3);
-    if (!img) {
-        fprintf(stderr, "Error loading image %s\n", input_path);
-        return 1;
-    }
+    int width, height;
+    unsigned char *img = load_image(input_path, &width, &height);
+    if (!img) return 1;
 
     unsigned char *out = malloc(width * height * 3);
     if (!out) {
@@ -41,7 +22,7 @@ int main(int argc, char *argv[]) {
 
     clock_t start = clock();
 
-    // Emboss filter: difference with upper-left neighbor + 128 offset
+    // Emboss filter
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             int idx = (y * width + x) * 3;
@@ -65,17 +46,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    clock_t end = clock();
-    double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
-    printf("Embossing took %.4f seconds\n", elapsed);
-
-    if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
-        fprintf(stderr, "Error saving image %s\n", output_path);
-    } else {
-        printf("Embossed image saved to %s\n", output_path);
-    }
-
-    free(out);
-    stbi_image_free(img);
+        finalize_and_save("embossing",output_path, out, width, height, img, start);
     return 0;
 }

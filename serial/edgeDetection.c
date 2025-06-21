@@ -1,19 +1,16 @@
 // edge_detection_serial.c
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include "stb_image.h"
-#include "stb_image_write.h"
+#include "../stb_image.h"
+#include "../stb_image_write.h"
 
-// Clamp pixel values to [0, 255]
+
 int clamp(int val) {
-    if (val < 0) return 0;
-    if (val > 255) return 255;
-    return val;
+  return (val < 0) ? 0 : ((val > 255) ? 255 : val);
 }
 
 int main(int argc, char *argv[]) {
@@ -52,10 +49,10 @@ int main(int argc, char *argv[]) {
         { 1,  2,  1}
     };
 
-    // Start timing
+    
     clock_t start = clock();
 
-    // Serial Sobel edge detection
+    //  Sobel
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             float edge_r_x = 0, edge_r_y = 0;
@@ -97,12 +94,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // End timing
+    
     clock_t end = clock();
     double elapsed_secs = (double)(end - start) / CLOCKS_PER_SEC;
     printf("Edge detection took %.4f seconds\n", elapsed_secs);
 
-    // Save output image as PNG
+    // Save 
     if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
         fprintf(stderr, "Error saving image %s\n", output_path);
         free(out);

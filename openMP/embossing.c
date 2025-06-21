@@ -1,4 +1,4 @@
-// embossing_openmp.c
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Construct paths
+    // input ouput paths
     char input_path[512];
     char output_path[512];
     snprintf(input_path, sizeof(input_path), "../inputImages/%s", argv[1]);
@@ -35,7 +35,6 @@ int main(int argc, char *argv[]) {
     unsigned char *out = malloc(width * height * 3);
 
     double start = omp_get_wtime();
-    // printf("Width: %d, Height: %d, Channels: %d\n", width, height, channels);
 
     // Parallel embossing filter
     #pragma omp parallel for collapse(2)
@@ -46,20 +45,20 @@ int main(int argc, char *argv[]) {
             if (x == 0 || y == 0) {
                 out[idx] = out[idx+1] = out[idx+2] = 128; // Neutral gray
             } else {
-                // Get upper-left neighbor
+                // upper-left neighbor
                 int ul_idx = ((y-1) * width + (x-1)) * 3;
                 
-                // Calculate differences
+                // differences
                 int diff_r = img[idx] - img[ul_idx];
                 int diff_g = img[idx+1] - img[ul_idx+1];
                 int diff_b = img[idx+2] - img[ul_idx+2];
                 
-                // Use maximum absolute difference
+                // absolute difference
                 int max_diff = diff_r;
                 if (abs(diff_g) > abs(max_diff)) max_diff = diff_g;
                 if (abs(diff_b) > abs(max_diff)) max_diff = diff_b;
                 
-                // Apply emboss effect
+                // emboss effect
                 int val = clamp(128 + max_diff);
                 out[idx] = out[idx+1] = out[idx+2] = (unsigned char)val;
             }

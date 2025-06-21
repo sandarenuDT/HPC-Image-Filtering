@@ -8,11 +8,10 @@
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
-// Clamp pixel values between 0 and 255
+// keep pixel values
 int clamp(int val) {
-    if (val < 0) return 0;
-    if (val > 255) return 255;
-    return val;
+    return (val < 0) ? 0 : (val > 255) ? 255 : val;
+
 }
 
 int main(int argc, char *argv[]) {
@@ -39,7 +38,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Sharpening kernel (3x3)
+    // kernel
     int kernel[3][3] = {
         { 0, -1,  0},
         {-1,  5, -1},
