@@ -11,6 +11,14 @@
 int clamp(int val) {
     return (val < 0) ? 0 : (val > 255 ? 255 : val);
 }
+// double calculate_rmse(unsigned char *img1, unsigned char *img2, int size) {
+//     double sum_sq_error = 0.0;
+//     for (int i = 0; i < size; i++) {
+//         double diff = (double)img1[i] - (double)img2[i];
+//         sum_sq_error += diff * diff;
+//     }
+//     return sqrt(sum_sq_error / size);
+// }
 
 // 2D Gaussian function
 float gaussian(float x, float y, float sigma) {
@@ -40,6 +48,13 @@ int main(int argc, char *argv[]) {
     unsigned char *img = stbi_load(input_path, &width, &height, &channels, 3);
     if (!img) {
         fprintf(stderr, "Failed to load image: %s\n", input_path);
+        return 1;
+    }
+    unsigned char *serial_img = stbi_load("../outputImages/serial_img.png", &width, &height, &channels, 3);
+    if (!serial_img) {
+        fprintf(stderr, "Error loading serial image for RMSE comparison\n");
+        // free(out);
+        stbi_image_free(img);
         return 1;
     }
 
@@ -89,6 +104,8 @@ int main(int argc, char *argv[]) {
         for (int x = 0; x < width; x++) {
             float r = 0.0f, g = 0.0f, b = 0.0f;
 
+            // #pragma omp simd
+
             for (int ky = -radius; ky <= radius; ky++) {
                 int yy = y + ky;
                 yy = yy < 0 ? 0 : (yy >= height ? height - 1 : yy);
@@ -121,6 +138,15 @@ int main(int argc, char *argv[]) {
     if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
         fprintf(stderr, "Failed to save image to %s\n", output_path);
     }
+    // int total_pixels = width * height * 3;
+    // double rmse = calculate_rmse(out, serial_img, total_pixels);
+
+    // printf("RMSE between parallel and serial images: %.4f\n", rmse);
+
+    // double accuracy = (1.0 - (rmse / 255.0)) * 100.0;
+    // if (accuracy < 0) accuracy = 0; // Clamp
+    // printf("Accuracy of parallel code vs serial code: %.2f%%\n", accuracy);
+
 
 
     free(kernel);

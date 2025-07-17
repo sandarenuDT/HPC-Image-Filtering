@@ -8,7 +8,6 @@
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
-
 int clamp(int val, int min, int max) {
     if (val < min) return min;
     if (val > max) return max;
@@ -17,19 +16,21 @@ int clamp(int val, int min, int max) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        printf("Usage: %s input_image output_image_name\n", argv[0]);
-        printf("Example: %s input.png edges.png\n", argv[0]);
+        printf("Usage: %s input_image output_image [threads]\n", argv[0]);
+        printf("Example: %s input.png edges.png 4\n", argv[0]);
         return 1;
     }
 
-    // input and output paths
+    // Set number of threads from argv or default to max
+    int num_threads = (argc > 3) ? atoi(argv[3]) : omp_get_max_threads();
+    omp_set_num_threads(num_threads);
+
     char input_path[512];
     char output_path[512];
     snprintf(input_path, sizeof(input_path), "../inputImages/%s", argv[1]);
     snprintf(output_path, sizeof(output_path), "../outputImages/%s", argv[2]);
 
     int width, height, channels;
-    // Load image
     unsigned char *img = stbi_load(input_path, &width, &height, &channels, 3);
     if (!img) {
         fprintf(stderr, "Error: Could not load image %s\n", input_path);
@@ -43,7 +44,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Sobel 
     int Gx[3][3] = {
         {-1, 0, 1},
         {-2, 0, 2},
@@ -54,10 +54,9 @@ int main(int argc, char *argv[]) {
         { 0,  0,  0},
         { 1,  2,  1}
     };
+
     double start = omp_get_wtime();
 
-
-    
     #pragma omp parallel for collapse(2)
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
@@ -100,14 +99,14 @@ int main(int argc, char *argv[]) {
     }
 
     double end = omp_get_wtime();
-    printf("Embossing time: %.4f seconds\n", end - start);
+    printf("Edge detection completed with %d threads in %.4f seconds\n", num_threads, end - start);
 
-    // Save output image as PNG
-     if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
+    if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
         fprintf(stderr, "Error saving %s\n", output_path);
     } else {
-        printf("Embossed image saved to %s\n", output_path);
+        printf("Edge detected image saved to %s\n", output_path);
     }
+
     free(out);
     stbi_image_free(img);
     return 0;

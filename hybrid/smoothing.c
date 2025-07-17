@@ -4,10 +4,11 @@
 #include <stdlib.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
-
+// Clamp value to 0–255
 int clamp(int val) {
     return (val < 0) ? 0 : (val > 255 ? 255 : val);
 }
@@ -18,20 +19,20 @@ float gaussian(float x, float y, float sigma) {
     return expf(exponent) / (2.0f * M_PI * sigma * sigma);
 }
 
-// Helper for boundary
+//  for boundary
 int clamp_coord(int val, int max) {
     return (val < 0) ? 0 : (val > max) ? max : val;
 }
 
 int main(int argc, char *argv[]) {
-    int rank, size;
-    MPI_Init(&argc, &argv);
+    int rank, size, provided;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     if (argc < 3) {
         if(rank == 0)
-            printf("Usage: %s <input_image> <output_image> [sigma]\n", argv[0]);
+            printf("Usage: %s <input_image> <output_image> [sigma] [threads]\n", argv[0]);
         MPI_Finalize();
         return EXIT_FAILURE;
     }
@@ -39,6 +40,8 @@ int main(int argc, char *argv[]) {
     const char *input_filename = argv[1];
     const char *output_filename = argv[2];
     float sigma = (argc > 3) ? atof(argv[3]) : 0.85f;
+    int num_threads = (argc > 4) ? atoi(argv[4]) : omp_get_max_threads();
+    omp_set_num_threads(num_threads);
 
     char input_path[512], output_path[512];
     snprintf(input_path, sizeof(input_path), "../inputImages/%s", input_filename);
@@ -73,7 +76,7 @@ int main(int argc, char *argv[]) {
     int kernel_size = 2 * radius + 1;
     float *kernel = malloc(kernel_size * kernel_size * sizeof(float));
 
-    // Compute kernel (all processes do this)
+    // Compute kernel
     float sum = 0.0f;
     for (int y = -radius; y <= radius; y++) {
         for (int x = -radius; x <= radius; x++) {
@@ -91,25 +94,40 @@ int main(int argc, char *argv[]) {
     int start_row = rank * rows_per_proc + (rank < extra ? rank : extra);
     int local_rows = rows_per_proc + (rank < extra ? 1 : 0);
 
-    // Allocate output buffer for local rows
+    // for local rows 
+    int halo = radius;
+    int local_rows_with_halo = local_rows + 2 * halo;
+    unsigned char *local_in = malloc(local_rows_with_halo * width * 3);
+
+    // Copy local data from global image to local buffer (with halo)
+    for (int y = 0; y < local_rows_with_halo; y++) {
+        int global_y = start_row + y - halo;
+        int src_y = clamp_coord(global_y, height - 1);
+        memcpy(&local_in[y * width * 3], &img[src_y * width * 3], width * 3);
+    }
+
+    // Free original image after distribution
+    if (rank != 0) free(img);
+
+    // Allocate output buffer for local rows (no halo)
     unsigned char *local_out = malloc(local_rows * width * 3);
 
     double start_time = MPI_Wtime();
 
-    // Each process processes its portion
+    // OpenMP parallel Gaussian blur on local rows (skip halo rows)
+    #pragma omp parallel for schedule(dynamic)
     for (int y = 0; y < local_rows; y++) {
-        int global_y = start_row + y;
         for (int x = 0; x < width; x++) {
             float r = 0.0f, g = 0.0f, b = 0.0f;
             for (int ky = -radius; ky <= radius; ky++) {
-                int yy = clamp_coord(global_y + ky, height - 1);
+                int yy = y + ky + halo;
                 for (int kx = -radius; kx <= radius; kx++) {
                     int xx = clamp_coord(x + kx, width - 1);
                     float weight = kernel[(ky + radius) * kernel_size + (kx + radius)];
                     int idx = (yy * width + xx) * 3;
-                    r += img[idx]     * weight;
-                    g += img[idx + 1] * weight;
-                    b += img[idx + 2] * weight;
+                    r += local_in[idx]     * weight;
+                    g += local_in[idx + 1] * weight;
+                    b += local_in[idx + 2] * weight;
                 }
             }
             int out_idx = (y * width + x) * 3;
@@ -121,7 +139,7 @@ int main(int argc, char *argv[]) {
 
     double end_time = MPI_Wtime();
 
-    // Gather all  to root
+    // Gather all processed rows to root
     int *recvcounts = NULL, *displs = NULL;
     unsigned char *out = NULL;
     if (rank == 0) {
@@ -141,8 +159,8 @@ int main(int argc, char *argv[]) {
                 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
-        printf("Smoothing completed (σ=%.2f) with %d processes in %.3f seconds.\n",
-               sigma, size, end_time - start_time);
+        printf("Smoothing completed (σ=%.2f) with %d MPI processes and %d OpenMP threads per process in %.3f seconds.\n",
+               sigma, size, num_threads, end_time - start_time);
 
         if (!stbi_write_png(output_path, width, height, 3, out, width * 3)) {
             fprintf(stderr, "Failed to save image to %s\n", output_path);
@@ -153,8 +171,8 @@ int main(int argc, char *argv[]) {
     }
 
     free(kernel);
+    free(local_in);
     free(local_out);
-    stbi_image_free(img);
 
     MPI_Finalize();
     return 0;
