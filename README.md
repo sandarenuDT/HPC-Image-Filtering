@@ -29,27 +29,26 @@ To implement and compare the performance of four image processing filters using 
 ---
 ## Build Instructions
 
-### 1. Serial Version
+### 🔹 1. Serial Version
 ```bash
 gcc smoothing.c -o smoothing -lm
 ./smoothing input.png output.png
+```
 
-### 2. openMP Version
+### 🔹 2. OpenMP Version
 ```bash
-gcc smoothing.c -fopenmp -o smoothing -lm
-./smoothing input.png output.png
+gcc smoothing_openmp.c -fopenmp -o smoothing_openmp -lm
+./smoothing_openmp input.png output.png
+```
 
-### 3.MPI version
+### 🔹 3. MPI Version
 ```bash
-mpicc smoothing.c -o smoothing -lm
-mpirun -np 4 ./smoothing input.png output.png 
+mpicc smoothing_mpi.c -o smoothing_mpi -lm
+mpirun -np 4 ./smoothing_mpi input.png output.png
+```
 
-### 4.Hybrid Version (MPI + OpenMP)
-mpicc edge_hybrid.c -fopenmp -o edge_hybrid -lm
-mpirun -np 4 ./edge_hybrid input.png output.png
-
-
-
-
-
-
+### 🔹 4. Hybrid Version (MPI + OpenMP)
+```bash
+mpicc smoothing_hybrid.c -fopenmp -o smoothing_hybrid -lm
+mpirun -np 4 ./smoothing_hybrid input.png output.png
+```
